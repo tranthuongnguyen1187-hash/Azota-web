@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AZOTA PRO - Lớp học online</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+  <style>
+    :root{--p:#00aaff;--cam:#ff6b35;--s:#28a745;--d:#dc3545;--bg:#f8f9fa}
+    *{margin:0;padding:0;box-sizing:border-box;font-family:system-ui,sans-serif}
+    body{background:var(--bg);padding:15px;line-height:1.6}
+    .c{max-width:600px;margin:auto;background:white;border-radius:20px;padding:20px;margin-bottom:20px;box-shadow:0 5px 20px #0001}
+    h1{font-size:1.5em;color:var(--p);text-align:center;margin:10px 0}
+    .logo img{width:70px;height:70px;border-radius:15px}
+    textarea{width:100%;padding:15px;border:2px solid #ddd;border-radius:15px;font-size:1em;resize:vertical}
+    .btn{background:var(--p);color:white;border:none;padding:14px;border-radius:50px;font-size:1.1em;width:100%;margin:10px 0;cursor:pointer}
+    .btn-s{background:var(--s)}.btn-d{background:var(--d)}
+    .q{margin:15px 0;padding:18px;background:#f8fdff;border-radius:15px;border:1px solid #eee}
+    .opts label{display:block;padding:15px;border:2px solid #eee;border-radius:15px;margin:8px 0;cursor:pointer;position:relative;transition:.2s}
+    .opts input{position:absolute;opacity:0}
+    .opts input:checked+span{background:var(--cam);color:white;font-weight:bold;border-radius:12px}
+    .timer{font-size:1.8em;font-weight:bold;color:var(--d);text-align:center;margin:15px 0}
+    .rank td{padding:12px;border-bottom:1px solid #eee}
+    .gold{color:#ffd700;font-size:1.6em}
+    .silver{color:#c0c0c0}
+    .bronze{color:#cd7f32}
+    .hidden{display:none}
+    .select-time{position:relative;display:inline-block;width:100%}
+    .select-time input[type="text"]{width:100%;padding:12px;border:2px solid #ddd;border-radius:12px;text-align:center;cursor:pointer}
+    .dropdown{position:absolute;top:100%;left:0;width:100%;background:white;border:1px solid #ddd;border-radius:12px;max-height:200px;overflow-y:auto;z-index:10}
+    .dropdown div{padding:12px;cursor:pointer}
+    .dropdown div:hover{background:#f0f8ff}
+    .custom-time{display:flex;gap:10px;margin-top:10px}
+    .custom-time input{width:48%;padding:10px;border:1px solid #ddd;border-radius:8px;text-align:center}
+    canvas{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9999}
+  </style>
+</head>
+<body>
+  <div class="c" style="text-align:center">
+    <div class="logo"><img src="https://via.placeholder.com/70/00aaff/fff?text=A" alt="Logo"></div>
+    <h1>AZOTA PRO</h1>
+    <p>Dán Excel → Chọn thời gian → Làm bài → Pháo hoa!</p>
+  </div>
+
+  <div id="step1" class="c">
+    <h2>Dán dữ liệu Excel</h2>
+    <textarea id="excel" rows="6" placeholder="Câu 1: 1+1=?
+A. 1
+B. 2
+C. 3
+D. 4
+Đáp án đúng: B
+
+Câu 2: ..."></textarea>
+
+    <div style="margin:15px 0">
+      <h3>Thời gian làm bài</h3>
+      <div class="select-time">
+        <input type="text" id="timeDisplay" value="10 phút" readonly onclick="toggleDropdown()">
+        <div class="dropdown hidden" id="timeOptions">
+          <div onclick="setTime(10)">10 phút</div>
+          <div onclick="setTime(20)">20 phút</div>
+          <div onclick="setTime(30)">30 phút</div>
+          <div onclick="setTime(45)">45 phút</div>
+          <div onclick="setTime(60)">1 tiếng</div>
+          <div onclick="showCustom()">Tùy ý...</div>
+        </div>
+      </div>
+      <div id="customTime" class="custom-time hidden">
+        <input type="number" id="hours" placeholder="Giờ" min="0" max="5">
+        <input type="number" id="minutes" placeholder="Phút" min="0" max="59">
+      </div>
+    </div>
+
+    <button class="btn" onclick="parseAndStart()">TẠO ĐỀ & BẮT ĐẦU</button>
+  </div>
+
+  <div id="quiz" class="c hidden">
+    <div class="timer" id="timer">10:00</div>
+    <h2 id="qtitle"></h2>
+    <div id="qbody"></div>
+    <button class="btn btn-s" id="submitBtn" onclick="submitQuiz()" style="margin-top:20px">NỘP BÀI</button>
+    <div id="result" class="hidden"></div>
+  </div>
+
+  <div id="rank" class="c hidden">
+    <h2>Bảng xếp hạng</h2>
+    <table class="rank" width="100%" id="rankTable"><tr><td>Đang tải...</td></tr></table>
+    <button class="btn" onclick="location.href='/'">TẠO ĐỀ MỚI</button>
+  </div>
+
+  <canvas id="fireworks"></canvas>
+
+  <script>
+    let questions = [], totalTime = 600, timeLeft = totalTime, timerId, quizId = Date.now()
+
+    function toggleDropdown() {
+      document.getElementById('timeOptions').classList.toggle('hidden')
+    }
+
+    function setTime(minutes) {
+      totalTime = minutes * 60
+      document.getElementById('timeDisplay').value = minutes === 60 ? '1 tiếng' : `${minutes} phút`
+      toggleDropdown()
+    }
+
+    function showCustom() {
+      document.getElementById('customTime').classList.remove('hidden')
+      toggleDropdown()
+    }
+
+    function getCustomTime() {
+      const h = parseInt(document.getElementById('hours').value) || 0
+      const m = parseInt(document.getElementById('minutes').value) || 0
+      return (h * 3600) + (m * 60)
+    }
+
+    async function parseAndStart() {
+      const text = document.getElementById('excel').value.trim()
+      if (!text) return alert("Dán dữ liệu trước!")
+
+      const blocks = text.split(/\n\s*\n/).filter(b => b.trim())
+      questions = []
+
+      blocks.forEach(block => {
+        const lines = block.split('\n').map(l => l.trim()).filter(l => l)
+        if (lines.length < 6) return
+        let q = "", opts = [], correct = -1, i = 0
+        while (i < lines.length && !lines[i].match(/^[ABCD]\./)) {
+          if (lines[i].includes('?') || lines[i].toLowerCase().includes('câu ')) q += lines[i] + " "
+          i++
+        }
+        q = q.trim()
+        while (i < lines.length && opts.length < 4 && lines[i].match(/^[ABCD]\./)) {
+          opts.push(lines[i].slice(3).trim())
+          i++
+        }
+        const ans = lines.find(l => l.toLowerCase().includes('đáp án đúng') || l.includes('Đáp án:'))
+        if (ans) correct = ['A','B','C','D'].indexOf(ans.match(/[ABCD]/)[0])
+        if (q && opts.length === 4 && correct >= 0) questions.push({q, opts, correct})
+      })
+
+      if (questions.length === 0) return alert("Không tìm thấy câu hỏi!")
+
+      if (!document.getElementById('customTime').classList.contains('hidden')) {
+        const custom = getCustomTime()
+        if (custom <= 0) return alert("Chọn thời gian hợp lệ!")
+        totalTime = custom
+      }
+
+      // Tạo bài trên server
+      const res = await fetch('/api/create', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({questions, time: totalTime})
+      })
+      const data = await res.json()
+      location.href = `/quiz/${data.id}`
+    }
+
+    // Load quiz nếu có ID
+    if (location.pathname.startsWith('/quiz/')) {
+      const id = location.pathname.split('/').pop()
+      fetch(`/api/quiz/${id}`).then(r => r.json()).then(d => {
+        questions = d.questions
+        totalTime = d.time
+        timeLeft = totalTime
+        startQuiz()
+      })
+    }
+
+    function startQuiz() {
+      document.getElementById('step1').classList.add('hidden')
+      document.getElementById('quiz').classList.remove('hidden')
+      document.getElementById('qtitle').innerText = `Bài tập - ${questions.length} câu`
+      const body = document.getElementById('qbody')
+      body.innerHTML = ''
+      questions.forEach((q, i) => {
+        body.innerHTML += `<div class="q"><b>Câu ${i+1}:</b> ${q.q}<div class="opts">
+          ${q.opts.map((o,j) => `<label><input type="radio" name="a${i}" value="${j}"><span>${['A','B','C','D'][j]}. ${o}</span></label>`).join('')}
+        </div></div>`
+      })
+      startTimer()
+    }
+
+    function startTimer() {
+      timerId = setInterval(() => {
+        timeLeft--
+        const m = Math.floor(timeLeft / 60).toString().padStart(2, '0')
+        const s = (timeLeft % 60).toString().padStart(2, '0')
+        document.getElementById('timer').innerText = `${m}:${s}`
+        if (timeLeft <= 0) {
+          clearInterval(timerId)
+          submitQuiz(true)
+        }
+      }, 1000)
+    }
+
+    async function submitQuiz(auto = false) {
+      clearInterval(timerId)
+      let score = 0
+      questions.forEach((q, i) => {
+        const sel = document.querySelector(`input[name="a${i}"]:checked`)
+        if (sel && parseInt(sel.value) === q.correct) score++
+      })
+      const name = prompt("Tên của bạn:") || "Ẩn danh"
+      const id = location.pathname.split('/').pop()
+
+      await fetch('/api/submit', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({id, score, name})
+      })
+
+      if (!auto) fireworks()
+      playSound()
+
+      document.getElementById('result').innerHTML = `
+        <h2 style="color:var(--s);text-align:center">Điểm: ${score}/${questions.length}</h2>
+        <button class="btn btn-s" onclick="location.href='/rank'">XEM BẢNG XẾP HẠNG</button>
+      `
+      document.getElementById('result').classList.remove('hidden')
+      document.getElementById('submitBtn').classList.add('hidden')
+    }
+
+    // Load rank
+    if (location.pathname === '/rank') {
+      fetch('/api/rank').then(r => r.json()).then(data => {
+        const tb = document.getElementById('rankTable')
+        const sorted = Object.entries(data).flatMap(([id, d]) =>
+          Object.entries(d.scores || {}).map(([uid, score]) => ({name: d.names[uid] || 'HS', score}))
+        ).sort((a,b) => b.score - a.score)
+        tb.innerHTML = sorted.map((p,i) => `
+          <tr>
+            <td width="50" class="${i===0?'gold':i===1?'silver':i===2?'bronze':''}">${i<3?['1st','2nd','3rd'][i]:i+1}</td>
+            <td><b>${p.name}</b></td>
+            <td align="right"><b>${p.score} điểm</b></td>
+          </tr>
+        `).join('') || '<tr><td>Chưa có ai nộp</td></tr>'
+        document.getElementById('step1').classList.add('hidden')
+        document.getElementById('rank').classList.remove('hidden')
+      })
+    }
+
+    // PHÁO HOA + ÂM THANH
+    const canvas = document.getElementById('fireworks')
+    const ctx = canvas.getContext('2d')
+    canvas.width = window.innerWidth
+    canvas.height = window.innerHeight
+    let particles = []
+
+    function fireworks() {
+      for (let i = 0; i < 60; i++) {
+        particles.push({
+          x: Math.random() * canvas.width,
+          y: Math.random() * canvas.height * 0.3,
+          vx: (Math.random() - 0.5) * 12,
+          vy: (Math.random() - 0.5) * 12,
+          color: `hsl(${Math.random()*360},100%,50%)`,
+          life: 100
+        })
+      }
+      requestAnimationFrame(animate)
+    }
+
+    function animate() {
+      ctx.fillStyle = 'rgba(0,0,0,0.1)'
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+      particles = particles.filter(p => {
+        p.x += p.vx; p.y += p.vy; p.vy += 0.3; p.life--
+        ctx.fillStyle = p.color
+        ctx.fillRect(p.x, p.y, 6, 6)
+        return p.life > 0
+      })
+      if (particles.length) requestAnimationFrame(animate)
+    }
+
+    function playSound() {
+      new Audio('https://www.soundjay.com/buttons/sounds/button-09.mp3').play().catch(() => {})
+    }
+
+    window.addEventListener('resize', () => {
+      canvas.width = window.innerWidth
+      canvas.height = window.innerHeight
+    })
+  </script>
+</body>
+    </html>
